@@ -380,10 +380,10 @@ def create_adapter(
     adapter: DiscreteTimeAdapter
     if provider == "openai":
         from tau2.voice.audio_native.openai.discrete_time_adapter import (
-            DiscreteTimeAudioNativeAdapter,
+            DiscreteTimeOpenAIAdapter,
         )
 
-        adapter = DiscreteTimeAudioNativeAdapter(
+        adapter = DiscreteTimeOpenAIAdapter(
             tick_duration_ms=tick_duration_ms,
             send_audio_instant=send_audio_instant,
             model=model,

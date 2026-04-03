@@ -8,7 +8,7 @@ interruption (SpeechStartedEvent), the adapter calls truncate_item()
 on the OpenAI API to inform the server how much audio was played.
 
 Usage:
-    adapter = DiscreteTimeAudioNativeAdapter(
+    adapter = DiscreteTimeOpenAIAdapter(
         tick_duration_ms=200,
         send_audio_instant=False,
     )
@@ -56,7 +56,7 @@ from tau2.voice.audio_native.openai.provider import (
 from tau2.voice.audio_native.tick_result import TickResult, UtteranceTranscript
 
 
-class DiscreteTimeAudioNativeAdapter(DiscreteTimeAdapter):
+class DiscreteTimeOpenAIAdapter(DiscreteTimeAdapter):
     """Adapter for discrete-time simulation with OpenAI Realtime API.
 
     Uses the shared DiscreteTimeAdapter template for tick lifecycle.
@@ -127,7 +127,7 @@ class DiscreteTimeAudioNativeAdapter(DiscreteTimeAdapter):
             )
             self._connected = True
             logger.info(
-                f"DiscreteTimeAudioNativeAdapter connected to OpenAI Realtime API "
+                f"DiscreteTimeOpenAIAdapter connected to OpenAI Realtime API "
                 f"(tick={self.tick_duration_ms}ms, bytes_per_tick={self.bytes_per_tick})"
             )
         except Exception as e:
@@ -163,7 +163,7 @@ class DiscreteTimeAudioNativeAdapter(DiscreteTimeAdapter):
         self._tick_count = 0
         self._cumulative_user_audio_ms = 0
         self.clear_buffers()
-        logger.info("DiscreteTimeAudioNativeAdapter disconnected")
+        logger.info("DiscreteTimeOpenAIAdapter disconnected")
 
     async def _async_disconnect(self) -> None:
         if self._owns_provider and self._provider is not None:
