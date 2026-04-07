@@ -988,6 +988,7 @@ def run_review(args):
     from rich.console import Console
 
     from tau2.scripts.review_conversation import ReviewMode, find_results_files, review
+    from tau2.scripts.view_simulations import format_results_label
 
     logger.configure(handlers=[{"sink": sys.stderr, "level": "WARNING"}])
 
@@ -1010,13 +1011,13 @@ def run_review(args):
             style="bold blue",
         )
         for i, rf in enumerate(results_files, 1):
-            console.print(f"  {i}. {rf.parent.name}/results.json")
+            console.print(f"  {i}. {format_results_label(rf)}/results.json")
         console.print()
 
     for i, results_file in enumerate(results_files):
         if len(results_files) > 1:
             console.print(
-                f"\n{'=' * 60}\n[bold cyan]Processing ({i + 1}/{len(results_files)}): {results_file.parent.name}[/bold cyan]\n{'=' * 60}"
+                f"\n{'=' * 60}\n[bold cyan]Processing ({i + 1}/{len(results_files)}): {format_results_label(results_file)}[/bold cyan]\n{'=' * 60}"
             )
 
         review(

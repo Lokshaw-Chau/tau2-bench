@@ -64,3 +64,30 @@ def test_solo_agent(solo_agent: LLMSoloAgent):
     assert isinstance(agent_msg, AssistantMessage)
     assert agent_state is not None
     assert len(agent_state.messages) == 1
+
+
+def test_agent_can_disable_reasoning_history_via_llm_args(
+    get_environment, first_user_message: UserMessage, monkeypatch: pytest.MonkeyPatch
+):
+    captured_kwargs = {}
+
+    def fake_generate(*, model, tools, messages, call_name, **kwargs):
+        captured_kwargs.update(kwargs)
+        return AssistantMessage(role="assistant", content="stubbed response")
+
+    monkeypatch.setattr("tau2.agent.llm_agent.generate", fake_generate)
+
+    agent = LLMAgent(
+        llm="gpt-4o-mini",
+        tools=get_environment().get_tools(),
+        domain_policy=get_environment().get_policy(),
+        llm_args={"include_reasoning_content_in_history": False},
+    )
+
+    agent_state = agent.get_init_state()
+    agent_msg, agent_state = agent.generate_next_message(
+        first_user_message, agent_state
+    )
+
+    assert agent_msg.content == "stubbed response"
+    assert captured_kwargs["include_reasoning_content_in_history"] is False

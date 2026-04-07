@@ -48,6 +48,8 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
+INCLUDE_REASONING_CONTENT_IN_HISTORY_KWARG = "include_reasoning_content_in_history"
+
 # Configure httpx connection limits for LiteLLM
 httpx_limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
 litellm.client_session = httpx.Client(limits=httpx_limits)
@@ -165,7 +167,11 @@ def to_tau2_messages(
     return tau2_messages
 
 
-def to_litellm_messages(messages: list[Message]) -> list[dict]:
+def to_litellm_messages(
+    messages: list[Message],
+    *,
+    include_reasoning_content_in_history: bool = True,
+) -> list[dict]:
     """
     Convert a list of Tau2 messages to a list of litellm messages.
     """
@@ -188,13 +194,22 @@ def to_litellm_messages(messages: list[Message]) -> list[dict]:
                     }
                     for tc in message.tool_calls
                 ]
-            litellm_messages.append(
-                {
-                    "role": "assistant",
-                    "content": message.content,
-                    "tool_calls": tool_calls,
-                }
-            )
+            assistant_message = {
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": tool_calls,
+            }
+            if include_reasoning_content_in_history:
+                raw_message = (
+                    (((message.raw_data or {}).get("choices") or [{}])[0]).get(
+                        "message"
+                    )
+                    or {}
+                )
+                reasoning_content = raw_message.get("reasoning_content")
+                if reasoning_content is not None:
+                    assistant_message["reasoning_content"] = reasoning_content
+            litellm_messages.append(assistant_message)
         elif isinstance(message, ToolMessage):
             litellm_messages.append(
                 {
@@ -372,6 +387,10 @@ def generate(
                    (e.g., "detect_interrupt", "generate_agent_message").
                    Used for logging and debugging.
         **kwargs: Additional arguments to pass to the model.
+            Supports the local-only flag
+            `include_reasoning_content_in_history` to control whether
+            historical assistant `reasoning_content` is forwarded back to
+            LiteLLM when reconstructing message history.
 
     Returns: A tuple containing the message and the cost.
     """
@@ -379,13 +398,20 @@ def generate(
     if kwargs.get("num_retries") is None:
         kwargs["num_retries"] = DEFAULT_MAX_RETRIES
 
+    include_reasoning_content_in_history = kwargs.pop(
+        INCLUDE_REASONING_CONTENT_IN_HISTORY_KWARG, False
+    )
+
     # Vertex AI Gemini 3 models require VERTEXAI_LOCATION="global"
     if model.startswith("vertex_ai/gemini-3") and not os.environ.get(
         "VERTEXAI_LOCATION"
     ):
         os.environ["VERTEXAI_LOCATION"] = "global"
 
-    litellm_messages = to_litellm_messages(messages)
+    litellm_messages = to_litellm_messages(
+        messages,
+        include_reasoning_content_in_history=include_reasoning_content_in_history,
+    )
     tools_schema = [tool.openai_schema for tool in tools] if tools else None
     if tools_schema and tool_choice is None:
         tool_choice = "auto"
@@ -397,6 +423,11 @@ def generate(
         "messages": formatted_messages,
         "tools": tools_schema,
         "tool_choice": tool_choice,
+        "local_options": {
+            INCLUDE_REASONING_CONTENT_IN_HISTORY_KWARG: (
+                include_reasoning_content_in_history
+            )
+        },
         "kwargs": {
             k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
             for k, v in kwargs.items()

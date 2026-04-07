@@ -8,7 +8,7 @@ from tau2.data_model.message import (
     UserMessage,
 )
 from tau2.environment.tool import Tool, as_tool
-from tau2.utils.llm_utils import generate
+from tau2.utils.llm_utils import generate, to_litellm_messages
 
 
 @pytest.fixture
@@ -75,3 +75,65 @@ def test_generate_tool_call(model: str, tool_call_messages: list[Message], tool:
     assert isinstance(response, AssistantMessage)
     assert response.tool_calls is None
     assert response.content == "25"
+
+
+def test_to_litellm_messages_includes_reasoning_content_by_default():
+    messages = [
+        AssistantMessage(
+            role="assistant",
+            content="Final answer",
+            raw_data={
+                "choices": [
+                    {
+                        "message": {
+                            "content": "Final answer",
+                            "reasoning_content": "hidden chain-of-thought",
+                        }
+                    }
+                ]
+            },
+        )
+    ]
+
+    litellm_messages = to_litellm_messages(messages)
+
+    assert litellm_messages == [
+        {
+            "role": "assistant",
+            "content": "Final answer",
+            "tool_calls": None,
+            "reasoning_content": "hidden chain-of-thought",
+        }
+    ]
+
+
+def test_to_litellm_messages_can_exclude_reasoning_content():
+    messages = [
+        AssistantMessage(
+            role="assistant",
+            content="Final answer",
+            raw_data={
+                "choices": [
+                    {
+                        "message": {
+                            "content": "Final answer",
+                            "reasoning_content": "hidden chain-of-thought",
+                        }
+                    }
+                ]
+            },
+        )
+    ]
+
+    litellm_messages = to_litellm_messages(
+        messages,
+        include_reasoning_content_in_history=False,
+    )
+
+    assert litellm_messages == [
+        {
+            "role": "assistant",
+            "content": "Final answer",
+            "tool_calls": None,
+        }
+    ]

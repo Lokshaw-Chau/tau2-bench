@@ -63,18 +63,27 @@ def expand_paths(paths: list[str], extension: str | None = None) -> list[str]:
             results_file = path_obj / "results.json"
             if extension == ".json" and results_file.exists():
                 files.append(str(results_file))
-            # Parent simulations directory: collect results.json from each
-            # immediate subdirectory.
+            # Simulations directory: recursively collect one preferred results
+            # file per run directory, preferring results_reviewed.json.
             elif extension == ".json" and (
                 path_obj.name == "simulations"
                 or path_obj.parent.name == "tau2"
                 and path_obj.name == "simulations"
             ):
-                for subdir in path_obj.iterdir():
-                    if subdir.is_dir():
-                        sim_file = subdir / "results.json"
-                        if sim_file.exists():
-                            files.append(str(sim_file))
+                preferred_by_dir: dict[Path, Path] = {}
+                for result_file in sorted(path_obj.rglob("results*.json")):
+                    if result_file.name not in {
+                        "results.json",
+                        "results_reviewed.json",
+                    }:
+                        continue
+                    parent_dir = result_file.parent
+                    existing = preferred_by_dir.get(parent_dir)
+                    if existing is None or result_file.name == "results_reviewed.json":
+                        preferred_by_dir[parent_dir] = result_file
+                files.extend(
+                    str(result_file) for result_file in preferred_by_dir.values()
+                )
             else:
                 for file_path in path_obj.rglob("*"):
                     if file_path.is_file():

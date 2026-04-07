@@ -25,6 +25,35 @@ from tau2.utils.display import ConsoleDisplay
 from tau2.utils.utils import DATA_DIR
 
 
+def _find_results_files_recursive(sim_dir: Path) -> list[Path]:
+    """Recursively find result files, preferring reviewed files per directory."""
+    if not sim_dir.exists():
+        return []
+
+    preferred_by_dir: dict[Path, Path] = {}
+    for result_file in sorted(sim_dir.rglob("results*.json")):
+        if result_file.name not in {"results.json", "results_reviewed.json"}:
+            continue
+        parent_dir = result_file.parent
+        existing = preferred_by_dir.get(parent_dir)
+        if existing is None or result_file.name == "results_reviewed.json":
+            preferred_by_dir[parent_dir] = result_file
+    return sorted(preferred_by_dir.values())
+
+
+def format_results_label(
+    results_file: Path, simulations_root: Optional[Path] = None
+) -> str:
+    """Format a results file path as a concise batch/domain label."""
+    if simulations_root is None:
+        simulations_root = Path(DATA_DIR) / "simulations"
+    try:
+        relative_parent = results_file.parent.relative_to(simulations_root)
+        return relative_parent.as_posix()
+    except ValueError:
+        return results_file.parent.name
+
+
 def get_tick_duration_ms(results: Results) -> Optional[int]:
     """Extract tick_duration_ms from Results.info.audio_native_config."""
     if results.info.audio_native_config is not None:
@@ -40,22 +69,7 @@ def get_available_simulations(sim_dir: Optional[Path] = None):
     if sim_dir is None:
         sim_dir = Path(DATA_DIR) / "simulations"
 
-    if not sim_dir.exists():
-        return []
-
-    # Look for results files in subdirectories
-    # Prefer results_reviewed.json (with reviews) over results.json
-    sim_files = []
-    for subdir in sim_dir.iterdir():
-        if subdir.is_dir():
-            reviewed_file = subdir / "results_reviewed.json"
-            results_file = subdir / "results.json"
-            if reviewed_file.exists():
-                sim_files.append(reviewed_file)
-            elif results_file.exists():
-                sim_files.append(results_file)
-
-    return sorted(sim_files)
+    return _find_results_files_recursive(sim_dir)
 
 
 def display_simulation_list(
@@ -344,8 +358,9 @@ def display_available_files(files):
     """Display a numbered list of available simulation files."""
     ConsoleDisplay.console.print("\n[bold blue]Available Simulation Files:[/]")
     for i, file in enumerate(files, 1):
-        dir_name = file.parent.name
-        ConsoleDisplay.console.print(f"[cyan]{i}.[/] {dir_name}")
+        ConsoleDisplay.console.print(
+            f"[cyan]{i}.[/] {format_results_label(Path(file))}"
+        )
 
 
 def display_simulation_with_task(

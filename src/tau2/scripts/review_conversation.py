@@ -48,6 +48,7 @@ from tau2.evaluator.review_llm_judge_user_only import UserOnlyReviewer
 from tau2.evaluator.reviewer import ReviewMode, review_simulation
 from tau2.metrics.agent_metrics import compute_metrics
 from tau2.utils.display import ConsoleDisplay, MarkdownDisplay
+from tau2.utils.utils import DATA_DIR
 
 # =============================================================================
 # Data Models for Review Output
@@ -1115,26 +1116,38 @@ def find_results_files(path: Path) -> list[Path]:
     Find all results.json files in a path.
 
     If path is a file, returns [path].
-    If path is a directory, recursively finds all results.json files.
+    If path is a directory, recursively finds results files and prefers
+    results_reviewed.json over results.json within the same directory.
     """
     if path.is_file():
         return [path]
 
-    results_files = []
-    # Look for results.json in immediate subdirectories (typical tau2 structure)
-    for subdir in sorted(path.iterdir()):
-        if subdir.is_dir():
-            results_file = subdir / "results.json"
-            if results_file.exists():
-                results_files.append(results_file)
+    preferred_by_dir: dict[Path, Path] = {}
+    for result_file in sorted(path.rglob("results*.json")):
+        if result_file.name not in {"results.json", "results_reviewed.json"}:
+            continue
+        parent_dir = result_file.parent
+        existing = preferred_by_dir.get(parent_dir)
+        if existing is None or result_file.name == "results_reviewed.json":
+            preferred_by_dir[parent_dir] = result_file
 
-    # If no results found in subdirs, check if results.json is directly in the path
-    if not results_files:
-        direct_results = path / "results.json"
-        if direct_results.exists():
-            results_files.append(direct_results)
+    if preferred_by_dir:
+        return sorted(preferred_by_dir.values())
 
-    return results_files
+    direct_results = path / "results.json"
+    if direct_results.exists():
+        return [direct_results]
+    return []
+
+
+def format_results_label(results_file: Path) -> str:
+    """Format a results file path as a concise batch/domain label."""
+    simulations_root = Path(DATA_DIR) / "simulations"
+    try:
+        relative_parent = results_file.parent.relative_to(simulations_root)
+        return relative_parent.as_posix()
+    except ValueError:
+        return results_file.parent.name
 
 
 def main():
@@ -1181,13 +1194,13 @@ def main():
                 style="bold blue",
             )
             for i, rf in enumerate(results_files, 1):
-                console.print(f"  {i}. {rf.parent.name}/results.json")
+                console.print(f"  {i}. {format_results_label(rf)}/results.json")
             console.print()
 
         for i, results_file in enumerate(results_files):
             if len(results_files) > 1:
                 console.print(
-                    f"\n{'=' * 60}\n[bold cyan]Processing ({i + 1}/{len(results_files)}): {results_file.parent.name}[/bold cyan]\n{'=' * 60}"
+                    f"\n{'=' * 60}\n[bold cyan]Processing ({i + 1}/{len(results_files)}): {format_results_label(results_file)}[/bold cyan]\n{'=' * 60}"
                 )
 
             review(
